@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pixel Flappy Bird</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #222; /* Dark background for contrast */
+            font-family: monospace;
+        }
+        canvas {
+            border: 4px solid #000;
+            background-color: #70c5ce; /* Sky blue background */
+            image-rendering: pixelated; /* Crucial for the pixel art effect */
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <script>
+        // --- Canvas Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Game Constants ---
+        const GAME_WIDTH = canvas.width;
+        const GAME_HEIGHT = canvas.height;
+        let gameState = 'start'; // start, playing, gameover
+
+        // --- Player (Bird) Properties ---
+        const bird = {
+            x: 50,
+            y: GAME_HEIGHT / 2,
+            width: 30,
+            height: 30,
+            gravity: 0.5,
+            velocity: 0,
+            color: '#ffcc00' // Yellow pixel style
+        };
+
+        // --- Pipe Properties ---
+        const pipeSettings = {
+            gap: 150, // Vertical gap size
+            pipeWidth: 40,
+            speed: 3,
+            spawnRate: 90 // Frames between pipe spawns
+        };
+        let pipes = [];
+        let score = 0;
+
+        // --- Game Loop Functions ---
+
+        function draw() {
+            // Clear the canvas (Sky)
+            ctx.fillStyle = '#70c5ce';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // Draw Pipes
+            pipes.forEach(pipe => {
+                // Top Pipe
+                ctx.fillStyle = '#74bf2e'; // Green pixel style
+                ctx.fillRect(pipe.x, 0, pipeSettings.pipeWidth, pipe.topHeight);
+
+                // Bottom Pipe
+                ctx.fillRect(pipe.x, pipe.topHeight + pipeSettings.gap, pipeSettings.pipeWidth, GAME_HEIGHT - (pipe.topHeight + pipeSettings.gap));
+            });
+
+            // Draw Bird (Player)
+            ctx.fillStyle = bird.color;
+            ctx.fillRect(bird.x, bird.y, bird.width, bird.height);
+
+            // Draw Ground (Pixel Style)
+            ctx.fillStyle = '#ded89f'; // Brown/dirt color
+            ctx.fillRect(0, GAME_HEIGHT - 30, GAME_WIDTH, 30);
+        }
+
+        function updateBird() {
+            // Apply Gravity
+            bird.velocity += bird.gravity;
+            bird.y += bird.velocity;
+
+            // Boundary Checks (Ground/Ceiling)
+            if (bird.y + bird.height >= GAME_HEIGHT - 30) {
+                bird.y = GAME_HEIGHT - 30 - bird.height;
+                gameOver();
+            }
+            if (bird.y <= 0) {
+                bird.y = 0;
+            }
+        }
+
+        function updatePipes() {
+            // Move pipes horizontally
+            pipes.forEach(pipe => {
+                pipe.x -= pipeSettings.speed;
+            });
+
+            // Remove off-screen pipes and spawn new ones
+            if (pipes.length > 0 && pipes[0].x < GAME_WIDTH) {
+                const firstPipe = pipes[0];
+
+                // Check for scoring (when a pipe passes the bird's x position)
+                if (firstPipe.x + pipeSettings.pipeWidth < bird.x && !firstPipe.passed) {
+                    score++;
+                    firstPipe.passed = true; // Mark as passed
+                }
+
+                // Remove pipes that are off screen
+                if (firstPipe.x + pipeSettings.pipeWidth < 0) {
+                    pipes.shift(); // Remove the oldest pipe
+                }
+            } else if (pipes.length === 0 && gameState === 'playing') {
+                 // If no pipes are left, start spawning the first one
+                 spawnPipe();
+            }
+        }
+
+        function spawnPipe() {
+            // Randomly determine the top pipe height, ensuring the gap is within bounds
+            const minTopHeight = 50;
+            const maxTopHeight = GAME_HEIGHT - 30 - pipeSettings.gap - minTopHeight;
+            
+            const topHeight = Math.floor(Math.random() * (maxTopHeight - minTopHeight + 1)) + minTopHeight;
+
+            pipes.push({
+                x: GAME_WIDTH,
+                topHeight: topHeight,
+                passed: false
+            });
+        }
+
+
+        function checkCollisions() {
+            // 1. Ground/Ceiling Collision (Already handled in updateBird, but good practice to double check)
+            if (bird.y + bird.height >= GAME_HEIGHT - 30) {
+                return true; // Hit ground
+            }
+
+            // 2. Pipe Collision
+            for (const pipe of pipes) {
+                // Check if the bird is within the horizontal bounds of a pipe
+                if (bird.x < pipe.x + pipeSettings.pipeWidth && bird.x + bird.width > pipe.x) {
+                    // Check vertical collision with the top pipe OR bottom pipe
+                    const hitTop = bird.y < pipe.topHeight;
+                    const hitBottom = bird.y + bird.height > pipe.topHeight + pipeSettings.gap;
+
+                    if (hitTop || hitBottom) {
+                        return true; // Collision detected
+                    }
+                }
+            }
+            return false; // No collision
+        }
+
+
+        function gameOver() {
+            gameState = 'gameover';
+            console.log(`Game Over! Final Score: ${score}`);
+            // Stop the game loop logic here if needed
+        }
+
+        // --- Main Game Loop ---
+
+        function gameLoop() {
+            if (gameState === 'playing') {
+                updateBird();
+                updatePipes();
+                
+                if (checkCollisions()) {
+                    gameOver();
+                }
+
+                draw();
+                requestAnimationFrame(gameLoop); // Continue the loop
+            } else if (gameState === 'start') {
+                 // Draw initial screen and prompt
+                 draw();
+            } else if (gameState === 'gameover') {
+                 ctx.fillStyle = 'white';
+                 ctx.font = '40px monospace';
+                 ctx.textAlign = 'center';
+                 ctx.fillText('GAME OVER', GAME_WIDTH / 2, GAME_HEIGHT / 2 - 30);
+                 ctx.font = '20px monospace';
+                 ctx.fillText(`Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10);
+            }
+        }
+
+
+        // --- Input Handling (Jump) ---
+
+        function jump() {
+            if (gameState === 'playing') {
+                bird.velocity = -10; // Negative velocity moves the bird up
+            } else if (gameState === 'start' || gameState === 'gameover') {
+                // Restart the game on click/spacebar
+                resetGame();
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                jump();
+            }
+        });
+
+        canvas.addEventListener('click', jump);
+
+
+        // --- Initialization ---
+
+        function resetGame() {
+            bird.y = GAME_HEIGHT / 2;
+            bird.velocity = 0;
+            pipes = [];
+            score = 0;
+            gameState = 'playing';
+            
+            // Start spawning pipes immediately
+            let pipeTimer = 0;
+            const spawnInterval = pipeSettings.spawnRate;
+
+            function timer() {
+                pipeTimer++;
+                if (pipeTimer >= spawnInterval) {
+                    spawnPipe();
+                    pipeTimer = 0;
+                }
+                requestAnimationFrame(timer);
+            }
+
+            // Start the spawning mechanism
+            requestAnimationFrame(timer);
+        }
+
+        // Start the initial rendering setup
+        resetGame();
+        gameLoop(); // Start the main animation loop
+
+    </script>
+
+</body>
+</html>
